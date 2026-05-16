@@ -49,7 +49,9 @@ jobs:
             try {
               await page.goto(url, { waitUntil: 'load', timeout: 60000 });
               console.log('Page loaded. Waiting 7 seconds...');
-              await page.waitForTimeout(7000);
+
+              // جایگزین page.waitForTimeout (سازگار با همه نسخه‌ها)
+              await new Promise(resolve => setTimeout(resolve, 7000));
 
               // ۱. اسکرین‌شات تمام صفحه
               await page.screenshot({ path: 'output/screenshot.png', fullPage: true });
@@ -100,7 +102,7 @@ jobs:
           })();
           EOF
 
-      - name: Create output directories
+      - name: Create output directory
         run: |
           DOMAIN=$(echo "${{ github.event.inputs.url }}" | awk -F/ '{print $3}' | sed 's/^www\.//')
           TIMESTAMP=$(date +%Y%m%d_%H%M%S)
@@ -108,7 +110,7 @@ jobs:
           mkdir -p "$FOLDER"
           echo "FOLDER=$FOLDER" >> $GITHUB_ENV
           # لینک کردن output به پوشه نهایی
-          ln -s "$(pwd)/$FOLDER" output
+          ln -sf "$(pwd)/$FOLDER" output
 
       - name: Run capture
         env:
