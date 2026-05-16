@@ -44,7 +44,7 @@ jobs:
 
             const browser = await chromium.launch();
             const page = await browser.newPage();
-            await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+            await page.goto(url, { waitUntil: 'networkidle', timeout: 200000 });
             console.log('Page loaded. Waiting 7 seconds...');
             await page.waitForTimeout(7000);
 
