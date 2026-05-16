@@ -1,0 +1,108 @@
+name: Browser Capture & Commit
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'آدرس سایت مورد نظر'
+        required: true
+        default: 'https://example.com'
+
+# اجازه‌ی نوشتن در مخزن برای کامیت و push
+permissions:
+  contents: write
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}        # برنچ فعلی که workflow روی آن اجرا می‌شود
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install Playwright & dependencies
+        run: |
+          npm init -y
+          npm install playwright
+          npx playwright install --with-deps chromium
+
+      - name: Create capture script
+        run: |
+          cat > capture.js << 'EOF'
+          const { chromium } = require('playwright');
+          const fs = require('fs');
+
+          (async () => {
+            const url = process.env.URL;
+            console.log(`Opening: ${url}`);
+
+            const browser = await chromium.launch();
+            const page = await browser.newPage();
+            await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+            console.log('Page loaded. Waiting 7 seconds...');
+            await page.waitForTimeout(7000);
+
+            // Screenshot
+            await page.screenshot({ path: 'screenshot.png', fullPage: true });
+            console.log('Screenshot saved: screenshot.png');
+
+            // HTML
+            const html = await page.content();
+            fs.writeFileSync('page.html', html);
+            console.log('HTML saved: page.html');
+
+            // Extract all links (<a href>)
+            const links = await page.$$eval('a', as =>
+              as.map(a => a.href).filter(href => href)
+            );
+            fs.writeFileSync('links.txt', [...new Set(links)].join('\n'));
+            console.log(`Links saved: ${links.length} unique links`);
+
+            // Extract media links (img, video, audio, source)
+            const media = await page.$$eval(
+              'img, video, audio, source',
+              els => els.map(el => el.src || el.getAttribute('src')).filter(s => s)
+            );
+            fs.writeFileSync('media_links.txt', [...new Set(media)].join('\n'));
+            console.log(`Media links saved: ${media.length} unique media URLs`);
+
+            await browser.close();
+            console.log('Done.');
+          })().catch(err => {
+            console.error(err);
+            process.exit(1);
+          });
+          EOF
+
+      - name: Run capture
+        env:
+          URL: ${{ github.event.inputs.url }}
+        run: node capture.js
+
+      - name: Move files to pages/ and commit
+        run: |
+          # ایجاد پوشه pages اگر وجود ندارد
+          mkdir -p pages
+
+          # انتقال فایل‌های تولید شده به پوشه pages
+          mv screenshot.png pages/
+          mv page.html pages/
+          mv links.txt pages/
+          mv media_links.txt pages/
+
+          # پیکربندی git با هویت بات گیت‌هاب
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # افزودن و کامیت تغییرات
+          git add pages/
+          git commit -m "Update captured page: ${{ github.event.inputs.url }} [skip ci]" || echo "No changes to commit"
+
+          # push به برنچ جاری
+          git push origin ${{ github.ref_name }}
