@@ -1,0 +1,32 @@
+name: Download and Commit File
+
+on:
+  workflow_dispatch:
+    inputs:
+      file_url:
+        description: 'لینک مستقیم فایل (مثلاً https://example.com/files/example.zip)'
+        required: true
+
+jobs:
+  download-and-commit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # لازم برای کامیت و پوش کردن تغییرات
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create downloads folder
+        run: mkdir -p downloads
+
+      - name: Download file
+        run: curl -L "${{ github.event.inputs.file_url }}" -o downloads/file
+
+      - name: Commit and push changes
+        run: |
+          git config --global user.name "${{ github.actor }}"
+          git config --global user.email "${{ github.actor }}@users.noreply.github.com"
+          git add downloads/
+          git commit -m "Add downloaded file from ${{ github.event.inputs.file_url }}" || echo "No changes to commit"
+          git push
